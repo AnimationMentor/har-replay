@@ -6,7 +6,7 @@ A small, basic tool to replay requests from a HTTP Archive (HAR) file for testin
 Installation
 ============
 
-	git clone https://github.com/kkovacs/har-replay
+	git clone https://github.com/AnimationMentor/har-replay
 	cd har-replay
 	npm update
 	./main.js -f <filename.har>
