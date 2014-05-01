@@ -54,7 +54,7 @@ fs.readFile(commander.file, function(err, data) {
                 }, {})
             }, function(error, response, body) {
                 // Just print a status, drop the files as soon as possible
-                console.log(entry.request.url + " " + entry.request.method + (response ? " => " + response.statusCode: " X> " + error + ':' + body));
+                console.log(new Date() +'\t'+ entry.request.method +'\t'+ (response ? response.statusCode : error) +'\t'+ entry.request.url);
             });
 
             // Garbage collect, if we can (if started with --expose-gc)
