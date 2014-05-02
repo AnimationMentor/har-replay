@@ -15,6 +15,7 @@ commander
     .option('-s, --site <site>', 'only fire requests that are for this domain (ignore everything else)')
     .option('-f, --files <glob>', 'A glob pattern of paths to HAR files to replay')
     .option('-q, --quiet', 'Do not display any http errors')
+    .option('-d, --delaymax <secs>', 'Max number of seconds to delay before starting each script run. Default:0', 0)
     .parse(process.argv);
 
 // Check arguments (files is required)
@@ -74,61 +75,60 @@ glob(commander.files, function(er, files){
         fs.readFile(file, function(err, data) {
             if (err) throw err;
 
-            var har = JSON.parse(data),
-                basetime = moment(har['log']['entries'][0]['startedDateTime']),
-                expectedEvents = 0,
-                completedEvents = 0;
+            // Delay for a random number of millisecs 
+            _.delay(function() {
+                var har = JSON.parse(data),
+                    basetime = moment(har['log']['entries'][0]['startedDateTime']),
+                    expectedEvents = 0,
+                    completedEvents = 0;
 
-            // Passing in an object
-            _.forEach(har['log']['entries'], function(entry) {
+                // Passing in an object
+                _.forEach(har['log']['entries'], function(entry) {
 
-                // Ignore other sites if so requested
-                if (commander.site != undefined && entry.request.url.split('://')[1].split('/')[0] != commander.site)
-                    return;
+                    // Ignore other sites if so requested
+                    if (commander.site != undefined && entry.request.url.split('://')[1].split('/')[0] != commander.site)
+                        return;
 
-                // How late did this request happen?
-                var diff = moment(entry['startedDateTime']).diff(basetime, 'miliseconds');
+                    // How late did this request happen?
+                    var diff = moment(entry['startedDateTime']).diff(basetime, 'miliseconds');
 
-                // Send a request into the future
-                _.delay(function() {
-                    // New request
-                    var req = request({
-                        url: entry.request.url,
-                        method: entry.request.method,
-                        // reformat headers from HAR format to a dict
-                        headers: _.reduce(entry.request.headers, function(memo, e) {
-                            memo[e['name']] = e['value'];
-                            return memo;
-                        }, {})
-                    }, function(error, response, body) {
-                        // Just print a status, drop the files as soon as possible
+                    // Send a request into the future
+                    _.delay(function() {
+                        // New request
+                        var req = request({
+                            url: entry.request.url,
+                            method: entry.request.method,
+                            // reformat headers from HAR format to a dict
+                            headers: _.reduce(entry.request.headers, function(memo, e) {
+                                memo[e['name']] = e['value'];
+                                return memo;
+                            }, {})
+                        }, function(error, response, body) {
+                            // Just print a status, drop the files as soon as possible
 
-                        if (!response && !commander.quiet){
-                            multi.write(new Date() +'\t'+ entry.request.method +'\t\t\t'+ file +'\t'+ entry.request.url + '\t' + error + '\n');
-                        } else if (response.statusCode != 200 && !commander.quiet){
-                            multi.write(new Date() +'\t'+ entry.request.method +'\t'+ response.statusCode +'\t'+ file +'\t'+ entry.request.url +'\t'+ body + '\n');
-                        } else {
-                            // All good, do nothing
+                            if (!response && !commander.quiet){
+                                multi.write(new Date() +'\t'+ entry.request.method +'\t\t\t'+ file +'\t'+ entry.request.url + '\t' + error + '\n');
+                            } else if (response.statusCode != 200 && !commander.quiet){
+                                multi.write(new Date() +'\t'+ entry.request.method +'\t'+ response.statusCode +'\t'+ file +'\t'+ entry.request.url +'\t'+ body + '\n');
+                            } else {
+                                // All good, do nothing
+                            }
+
+                            completedEvents++;
+
+                            bars[fileIndex].percent((completedEvents/expectedEvents) * 100);
+                        });
+
+                        // Garbage collect, if we can (if started with --expose-gc)
+                        if (global.gc) {
+                            global.gc();
                         }
 
-                        completedEvents++;
+                    }, diff);
 
-                        bars[fileIndex].percent((completedEvents/expectedEvents) * 100);
-
-                        if (completedEvents === expectedEvents){
-                            gracefulExit();
-                        }   
-                    });
-
-                    // Garbage collect, if we can (if started with --expose-gc)
-                    if (global.gc) {
-                        global.gc();
-                    }
-
-                }, diff);
-
-                expectedEvents++;
-            });
+                    expectedEvents++;
+                });
+            }, Math.random() * commander.delaymax * 1000);
 
         });
     });
