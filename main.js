@@ -31,6 +31,7 @@ function gracefulExit(){
 
 process.on('SIGINT', gracefulExit);
 process.on('SIGTERM', gracefulExit);
+process.setMaxListeners(0);
 
 var multi = multimeter(process);
 multi.charm.reset();
@@ -108,7 +109,7 @@ glob(commander.files, function(er, files){
 
                             if (!response && !commander.quiet){
                                 multi.write(new Date() +'\t'+ entry.request.method +'\t\t\t'+ file +'\t'+ entry.request.url + '\t' + error + '\n');
-                            } else if (response.statusCode != 200 && !commander.quiet){
+                            } else if (response && response.statusCode != 200 && !commander.quiet){
                                 multi.write(new Date() +'\t'+ entry.request.method +'\t'+ response.statusCode +'\t'+ file +'\t'+ entry.request.url +'\t'+ body + '\n');
                             } else {
                                 // All good, do nothing
