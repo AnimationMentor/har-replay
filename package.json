@@ -3,11 +3,12 @@
   "description": "Tool to replay HTTP Archive (HAR) files for testing purposes",
   "author": "Kristof Kovacs <kkovacs@kkovacs.eu>",
   "dependencies": {
-    "underscore.string": "2.3.x",
     "underscore": "1.x.x",
     "request": "2.27.x",
     "moment": "2.4.x",
-    "commander": "2.0.x"
+    "commander": "2.0.x",
+    "multimeter": "0.0.1",
+    "glob": "3.2.9"
   },
   "scripts": {
     "start": "node ./main.js"

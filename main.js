@@ -5,63 +5,130 @@
 // Loading modules
 var fs = require("fs");
 var _ = require("underscore");
-var _s = require('underscore.string');
 var request = require("request");
 var moment = require("moment");
 var commander = require("commander");
+var multimeter = require("multimeter");
+var glob = require("glob");
 
 commander
     .option('-s, --site <site>', 'only fire requests that are for this domain (ignore everything else)')
-    .option('-f, --file <file>', 'HAR file to replay')
+    .option('-f, --files <glob>', 'A glob pattern of paths to HAR files to replay')
     .parse(process.argv);
 
-// Check arguments (file is required)
-if (commander.file == undefined) {
+// Check arguments (files is required)
+if (commander.files == undefined){
     commander.outputHelp();
     process.exit();
 }
 
+function gracefulExit(){
+    multi.write('\nExiting... (you may have to use `stty echo` to fix your terminal)\n');
+    process.exit();
+}
+
+process.on('SIGINT', gracefulExit);
+process.on('SIGTERM', gracefulExit);
+
+var multi = multimeter(process);
+multi.charm.reset();
+multi.on('^C', gracefulExit);
+multi.on('^D', gracefulExit);
+var bars = [];
+
+multi.write('Running HAR scripts (ctrl-D to exit):\n\n');
+
 // Don't worry about any bad https certs
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// Do the Bartman! :)
-fs.readFile(commander.file, function(err, data) {
-    if (err) throw err;
+glob(commander.files, function(er, files){
+    var filenames = [],
+        maxNameLen = 0;
 
-    var har = JSON.parse(data),
-        basetime = moment(har['log']['entries'][0]['startedDateTime']);
+    _.forEach(files, function(file, i) {
+        var filename = file.split('/').pop().split('.')[0];
+        maxNameLen = Math.max(filename.length, maxNameLen);
+        filenames.push(filename);
+    });
 
-    // Passing in an object
-    _.forEach(har['log']['entries'], function(entry) {
+    _.forEach(filenames, function(filename, i) {
+        multi.write(filename + ': \n');
 
-        // Ignore other sites if so requested
-        if (commander.site != undefined && entry.request.url.split('://')[1].split('/')[0] != commander.site)
-            return;
+        var bar = multi(maxNameLen + 3, i+3, {
+            width : maxNameLen + 3,
+            solid : {
+                text : '|',
+                foreground : 'white',
+                background : 'blue'
+            },
+            empty : { text : ' ' },
+        });
+        bars.push(bar);
+    });
 
-        // How late did this request happen?
-        var diff = moment(entry['startedDateTime']).diff(basetime, 'miliseconds');
+    multi.write('\n----- Errors below -----\n');
 
-        // Send a request into the future
-        _.delay(function() {
-            // New request
-            var req = request({
-                url: entry.request.url,
-                method: entry.request.method,
-                // reformat headers from HAR format to a dict
-                headers: _.reduce(entry.request.headers, function(memo, e) {
-                    memo[e['name']] = e['value'];
-                    return memo;
-                }, {})
-            }, function(error, response, body) {
-                // Just print a status, drop the files as soon as possible
-                console.log(new Date() +'\t'+ entry.request.method +'\t'+ (response ? response.statusCode : error) +'\t'+ entry.request.url);
+    // Do the Bartman! :)
+    _.forEach(files, function(file, fileIndex) {
+        fs.readFile(file, function(err, data) {
+            if (err) throw err;
+
+            var har = JSON.parse(data),
+                basetime = moment(har['log']['entries'][0]['startedDateTime']),
+                expectedEvents = 0,
+                completedEvents = 0;
+
+            // Passing in an object
+            _.forEach(har['log']['entries'], function(entry) {
+
+                // Ignore other sites if so requested
+                if (commander.site != undefined && entry.request.url.split('://')[1].split('/')[0] != commander.site)
+                    return;
+
+                // How late did this request happen?
+                var diff = moment(entry['startedDateTime']).diff(basetime, 'miliseconds');
+
+                // Send a request into the future
+                _.delay(function() {
+                    // New request
+                    var req = request({
+                        url: entry.request.url,
+                        method: entry.request.method,
+                        // reformat headers from HAR format to a dict
+                        headers: _.reduce(entry.request.headers, function(memo, e) {
+                            memo[e['name']] = e['value'];
+                            return memo;
+                        }, {})
+                    }, function(error, response, body) {
+                        // Just print a status, drop the files as soon as possible
+                        if (!response){
+                            multi.write(new Date() +'\t'+ entry.request.method +'\t\t\t'+ file +'\t'+ entry.request.url + '\t' + error + '\n');
+                        } else if (response.statusCode != 200){
+                            multi.write(new Date() +'\t'+ entry.request.method +'\t'+ response.statusCode +'\t'+ file +'\t'+ entry.request.url +'\t'+ body + '\n');
+                        } else {
+                            // All good, do nothing
+                        }
+
+                        completedEvents++;
+
+                        bars[fileIndex].percent((completedEvents/expectedEvents) * 100);
+
+                        if (completedEvents === expectedEvents){
+                            gracefulExit();
+                        }   
+                    });
+
+                    // Garbage collect, if we can (if started with --expose-gc)
+                    if (global.gc) {
+                        global.gc();
+                    }
+
+                }, diff);
+
+                expectedEvents++;
             });
 
-            // Garbage collect, if we can (if started with --expose-gc)
-            if (global.gc) {
-                global.gc();
-            }
-        }, diff);
+        });
     });
 });
 
