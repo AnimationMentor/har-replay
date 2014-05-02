@@ -1,7 +1,7 @@
 har-replay
 ==========
 
-A small, basic tool to replay requests from multiple HTTP Archives (HARs) file for testing purposes.
+A small, basic tool to replay requests from multiple HTTP Archive (HAR) files for testing purposes.
 
 Installation
 ============
