@@ -55,7 +55,7 @@ glob(commander.files, function(er, files){
         multi.write(filename + ': \n');
 
         var bar = multi(maxNameLen + 3, i+3, {
-            width : maxNameLen + 3,
+            width : 80,
             solid : {
                 text : '|',
                 foreground : 'white',
