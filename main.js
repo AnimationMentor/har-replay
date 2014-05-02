@@ -14,6 +14,7 @@ var glob = require("glob");
 commander
     .option('-s, --site <site>', 'only fire requests that are for this domain (ignore everything else)')
     .option('-f, --files <glob>', 'A glob pattern of paths to HAR files to replay')
+    .option('-q, --quiet', 'Do not display any http errors')
     .parse(process.argv);
 
 // Check arguments (files is required)
@@ -66,7 +67,7 @@ glob(commander.files, function(er, files){
         bars.push(bar);
     });
 
-    multi.write('\n----- Errors below -----\n');
+    multi.write('\n----- ' + (commander.quiet ? 'Errors Surpressed' : 'Errors Below') + ' -----\n');
 
     // Do the Bartman! :)
     _.forEach(files, function(file, fileIndex) {
@@ -101,9 +102,10 @@ glob(commander.files, function(er, files){
                         }, {})
                     }, function(error, response, body) {
                         // Just print a status, drop the files as soon as possible
-                        if (!response){
+
+                        if (!response && !commander.quiet){
                             multi.write(new Date() +'\t'+ entry.request.method +'\t\t\t'+ file +'\t'+ entry.request.url + '\t' + error + '\n');
-                        } else if (response.statusCode != 200){
+                        } else if (response.statusCode != 200 && !commander.quiet){
                             multi.write(new Date() +'\t'+ entry.request.method +'\t'+ response.statusCode +'\t'+ file +'\t'+ entry.request.url +'\t'+ body + '\n');
                         } else {
                             // All good, do nothing
